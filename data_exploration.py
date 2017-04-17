@@ -84,37 +84,38 @@ pl.show(False)
 
 well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, index_col=False)
 
-#  -------------------- Read vtk file --------------------
-vtk_file = 'D:\\Users\\dorta\Dropbox\Stanford\Research\workspace\\test_run\DiscretizationToolkit\\output_mesh.vtk'
-node_coords = pn.read_csv(vtk_file, delim_whitespace=True, skiprows=5, nrows=16650, index_col=False,
-                          header=None, names=['x', 'y', 'z'])
-cell_nodes = pn.read_csv(vtk_file, delim_whitespace=True, skiprows=16656, nrows=3727, index_col=False,
-                         header=None, names=range(1,21))
-# Transform cell_nodes into a list
-nodes_array = cell_nodes.values.tolist()
-nodes_list = []
-[nodes_list.extend(x) for x in nodes_array]
-len(nodes_list)
-
-aux = 0
-data_str = {}
-for cnt in range(0 , 8282):
-    n_els = nodes_list[aux]
-    stt_el = aux + 1
-    end_el = int(stt_el + n_els)
-    print([aux, n_els, stt_el, end_el])
-    data_str[cnt] = nodes_list[stt_el:end_el]
-    aux = int(end_el)
-
-nodes = pn.DataFrame.from_dict(data_str,orient='index')
-
-
-16656
-20384
+# #  -------------------- Read vtk file brute force --------------------
+# vtk_file = 'D:\\Users\\dorta\Dropbox\Stanford\Research\workspace\\test_run\DiscretizationToolkit\\output_mesh.vtk'
+# node_coords = pn.read_csv(vtk_file, delim_whitespace=True, skiprows=5, nrows=16650, index_col=False,
+#                           header=None, names=['x', 'y', 'z'])
+# cell_nodes = pn.read_csv(vtk_file, delim_whitespace=True, skiprows=16656, nrows=3727, index_col=False,
+#                          header=None, names=range(1,21))
+# # Transform cell_nodes into a list
+# nodes_array = cell_nodes.values.tolist()
+# nodes_list = []
+# [nodes_list.extend(x) for x in nodes_array]
+# len(nodes_list)
+#
+# aux = 0
+# data_str = {}
+# for cnt in range(0 , 8282):
+#     n_els = nodes_list[aux]
+#     stt_el = aux + 1
+#     end_el = int(stt_el + n_els)
+#     print([aux, n_els, stt_el, end_el])
+#     data_str[cnt] = nodes_list[stt_el:end_el]
+#     aux = int(end_el)
+#
+# nodes = pn.DataFrame.from_dict(data_str,orient='index')
+#
+#
 
 
+# ----------------- Read vtk fancy way -----------------
 from vtk import *
 from vtk.util.numpy_support import vtk_to_numpy
+
+vtk_file = 'D:\\Users\\dorta\Dropbox\Stanford\Research\workspace\\test_run\DiscretizationToolkit\\output_mesh.vtk'
 
 # load a vtk file as input
 reader = vtk.vtkUnstructuredGridReader()
@@ -125,7 +126,24 @@ reader.Update()
 data = reader.GetOutput()
 
 flowcell_id = vtk_to_numpy(data.GetCellData().GetArray('FLOWCELL_ID'))
-vtk_to_numpy(flowcell_id)
+pts_coords = vtk_to_numpy(data.GetPoints().GetData())
+cell_locations = vtk_to_numpy(data.GetCellLocationsArray())
+cell_data = vtk_to_numpy(data.GetCells().GetData())
+
+nodes_dict = []
+for c in range(len(cell_locations)):
+    stt = cell_locations[c] + 1
+    # last case
+    if c == len(cell_locations)-1:
+        pt_ids = cell_data[stt:]
+    else:
+        end = cell_locations[c+1]
+        pt_ids = cell_data[stt:end]
+    nodes_dict.append(pt_ids)
+
+
+
+
 # Read scalar names
 for m in range(reader.GetNumberOfScalarsInFile()):
     print(reader.GetScalarsNameInFile(m))
