@@ -45,48 +45,6 @@ pl.pcolor(temp_series.values)
 pl.colorbar()
 pl.show(False)
 
-
-# Add some normalized columns
-wellbore_data['time_norm'] = wellbore_data['time'].astype(float) /\
-                             (wellbore_data['time'].max() - wellbore_data['time'].min())
-wellbore_data['temp_norm'] = (wellbore_data.temperature - wellbore_data.temperature.min()) / \
-                             (wellbore_data.temperature.max() - wellbore_data.temperature.min())
-wellbore_data['ib_norm'] = (wellbore_data.IB.astype(float) - wellbore_data.IB.min()) / \
-                           (wellbore_data.IB.max() - wellbore_data.IB.min())
-X = wellbore_data.loc[:, ['time_norm', 'temp_norm', 'ib_norm']].values
-kmeans = KMeans(n_clusters=3).fit(X)
-wellbore_data['kmeans_label'] = kmeans.labels_
-
-ts2 = wellbore_data.pivot(values='kmeans_label', index='IB', columns='time')
-pl.pcolor(ts.values)
-pl.colorbar()
-pl.show(False)
-
-# --------- clasiffier - -----
-320
-5654
-
-wellbore_data['fracture'] = 0
-wellbore_data.loc[wellbore_data.IB.isin([320,5654]), 'fracture'] = 1
-X = wellbore_data.loc[:, ['time_norm', 'temp_norm']]
-Y = wellbore_data.loc[:,'fracture']
-clf = tree.DecisionTreeClassifier()
-clf = clf.fit(X, Y)
-wellbore_data['fracture_pred'] = clf.predict(X)
-
-ts3 = wellbore_data.pivot(values='fracture', index='IB', columns='time')
-pl.pcolor(ts3.values)
-pl.colorbar()
-pl.show(False)
-
-
-# Read transmissibilities
-
-well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, index_col=False)
-
-
-
-
 # ----------------- Read vtk fancy way -----------------
 from vtk import *
 from vtk.util.numpy_support import vtk_to_numpy
@@ -138,17 +96,15 @@ centroids = centroids.merge(flowcell_ids, on='cell_id', how='left')
 
 # These are the correct ones
 wb_ids = wellbore_data.IB.unique()
-
 centroids.loc[:,'wellbore'] = 0
 centroids.loc[centroids.flowcell_id.isin(wb_ids), 'wellbore'] = 1
 
-
+# Scatter plot of centroids
 ax = centroids.loc[centroids.wellbore==1].plot.scatter(x='x', y='y', color='red', label='wellbore');
-
 centroids.loc[centroids.wellbore==0].plot.scatter(x='x', y='y', color='gray', label='other', ax=ax);
 
 
-wb = wellbore_data.loc[:, ['T', 'IB', 'time']].merge(centroids, how='left', left_on='IB', right_on='flowcell_id')
+wb = wellbore_data.merge(centroids, how='left', left_on='IB', right_on='flowcell_id')
 wb.loc[:, 'T'] = wellbore_data.loc[:, 'T'] - 273
 temp_series = wb.pivot(values='T', index='x', columns='time').sort_index()
 pl.pcolor(temp_series.values)
@@ -164,28 +120,64 @@ for m in range(reader.GetNumberOfScalarsInFile()):
     print(reader.GetScalarsNameInFile(m))
 
 
-# #  -------------------- Read vtk file brute force --------------------
-# vtk_file = 'D:\\Users\\dorta\Dropbox\Stanford\Research\workspace\\test_run\DiscretizationToolkit\\output_mesh.vtk'
-# node_coords = pn.read_csv(vtk_file, delim_whitespace=True, skiprows=5, nrows=16650, index_col=False,
-#                           header=None, names=['x', 'y', 'z'])
-# cell_nodes = pn.read_csv(vtk_file, delim_whitespace=True, skiprows=16656, nrows=3727, index_col=False,
-#                          header=None, names=range(1,21))
-# # Transform cell_nodes into a list
-# nodes_array = cell_nodes.values.tolist()
-# nodes_list = []
-# [nodes_list.extend(x) for x in nodes_array]
-# len(nodes_list)
-#
-# aux = 0
-# data_str = {}
-# for cnt in range(0 , 8282):
-#     n_els = nodes_list[aux]
-#     stt_el = aux + 1
-#     end_el = int(stt_el + n_els)
-#     print([aux, n_els, stt_el, end_el])
-#     data_str[cnt] = nodes_list[stt_el:end_el]
-#     aux = int(end_el)
-#
-# nodes = pn.DataFrame.from_dict(data_str,orient='index')
-#
-#
+import matplotlib.pyplot as plt
+import numpy as np
+column_labels = list('ABCD')
+row_labels = list('WXYZ')
+data = temp_series.values
+fig, ax = plt.subplots()
+heatmap = ax.pcolor(data)
+
+# put the major ticks at the middle of each cell, notice "reverse" use of dimension
+y = np.array(temp_series.index.tolist())
+x = np.array(temp_series.columns.tolist())
+ax.set_yticks(x, minor=False)
+ax.set_xticks(y, minor=False)
+
+
+ax.set_xticklabels(x, minor=False)
+ax.set_yticklabels(y, minor=False)
+plt.show()
+
+
+# ---------------------- Machine- learning part ----------------------------------------------
+
+
+# Add some normalized columns
+wellbore_data['time_norm'] = wellbore_data['time'].astype(float) /\
+                             (wellbore_data['time'].max() - wellbore_data['time'].min())
+wellbore_data['temp_norm'] = (wellbore_data.temperature - wellbore_data.temperature.min()) / \
+                             (wellbore_data.temperature.max() - wellbore_data.temperature.min())
+wellbore_data['ib_norm'] = (wellbore_data.IB.astype(float) - wellbore_data.IB.min()) / \
+                           (wellbore_data.IB.max() - wellbore_data.IB.min())
+X = wellbore_data.loc[:, ['time_norm', 'temp_norm', 'ib_norm']].values
+kmeans = KMeans(n_clusters=3).fit(X)
+wellbore_data['kmeans_label'] = kmeans.labels_
+
+ts2 = wellbore_data.pivot(values='kmeans_label', index='IB', columns='time')
+pl.pcolor(ts.values)
+pl.colorbar()
+pl.show(False)
+
+# --------- clasiffier - -----
+320
+5654
+
+wellbore_data['fracture'] = 0
+wellbore_data.loc[wellbore_data.IB.isin([320,5654]), 'fracture'] = 1
+X = wellbore_data.loc[:, ['time_norm', 'temp_norm']]
+Y = wellbore_data.loc[:,'fracture']
+clf = tree.DecisionTreeClassifier()
+clf = clf.fit(X, Y)
+wellbore_data['fracture_pred'] = clf.predict(X)
+
+ts3 = wellbore_data.pivot(values='fracture', index='IB', columns='time')
+pl.pcolor(ts3.values)
+pl.colorbar()
+pl.show(False)
+
+
+# Read transmissibilities
+
+well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, index_col=False)
+
