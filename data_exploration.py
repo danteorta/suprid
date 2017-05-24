@@ -5,28 +5,37 @@ from sklearn import tree
 
 # ---- Define a few paths ----
 it_name = 'DANTEMODEL_T'
-rates_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/test_run/gprs_repo/{0}.rates.txt'.format(it_name)
-vars_path = 'D:\\Users\\dorta\\Dropbox\\Stanford\\Research\\workspace\\test_run\\gprs_repo\\{0}.vars.txt'.\
+# model_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/test_run/gprs_repo/'
+model_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/sandbox/80/'
+rates_path = model_path + '{0}.rates.txt'.format(it_name)
+vars_path = model_path + '{0}.vars.txt'.\
     format(it_name)
-fips_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/test_run/gprs_repo/{0}.FIPS.txt'.format(it_name)
-wells_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/test_run/gprs_repo/{0}.WELLS.StdWell_W.txt'.\
+fips_path = model_path + '{0}.FIPS.txt'.format(it_name)
+wells_path = model_path + '{0}.WELLS.StdWell_W.txt'.\
     format(it_name)
-trans_path = 'D:\\Users\dorta\Dropbox\Stanford\Research\workspace\\test_run\gprs_repo\model\\trans.txt'
+trans_path = model_path + 'model\\trans.txt'
 
 # --- Extract all the simulation results (All cells) ----
 # CAREFUL - THIS NUMBER MAY CHANGE
 batch_len = 8282
 skrow = 3
-stt_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=8282, index_col=False)
+stt_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=8282, index_col=False,
+                     usecols=['IB', 'p', 'T'])
 stt_df['time'] = 0
 # Iteratively import each time step from the file
-for t in range(1, 59):
-    new_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=8282, index_col=False)
+for t in range(1, 119):
+    try:
+        new_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=8282,
+                             index_col=False, usecols=['IB', 'p', 'T'])
+    except pn.io.common.EmptyDataError:
+        break
+
     new_df['time'] = t
     stt_df = stt_df.append(new_df)
     skrow = skrow + batch_len + 3
     print("batch {0}".format(t))
-
+# Save stt_df to pickle file
+stt_df.to_pickle(model_path + "stt_df")
 
 # -- Read well cells from file ----
 well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, nrows=53, index_col=False)
@@ -34,14 +43,22 @@ well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, nrows=53, inde
 # has a different id than the COMPDAT wells.txt file
 id_perf = well.PERF_NB
 wellbore_data = stt_df.loc[id_perf]
-wellbore_data['temperature'] = wellbore_data['T'] - 373
+wellbore_data['temperature'] = wellbore_data['T'] - 273
+wellbore_data.to_pickle(model_path + "wellbore_data")
 temp_series = wellbore_data.pivot(values='T', index='IB', columns='time')
-
+# Randomize the order
+# ts_2  = temp_series.sample(len(temp_series))
 # temp_series = stt_df.pivot(values='T', index='IB', columns='time')
 
 
-# Primary plot
+# # Primary plot
 pl.pcolor(temp_series.values)
+pl.colorbar()
+pl.show(False)
+
+
+# Primary plot
+pl.pcolor(ts_2.values)
 pl.colorbar()
 pl.show(False)
 
@@ -115,29 +132,29 @@ pl.show(False)
 a = wb.drop_duplicates(subset=['flowcell_id'])
 a.plot.scatter(x='x', y='y')
 
-# Read scalar names
-for m in range(reader.GetNumberOfScalarsInFile()):
-    print(reader.GetScalarsNameInFile(m))
-
-
-import matplotlib.pyplot as plt
-import numpy as np
-column_labels = list('ABCD')
-row_labels = list('WXYZ')
-data = temp_series.values
-fig, ax = plt.subplots()
-heatmap = ax.pcolor(data)
-
-# put the major ticks at the middle of each cell, notice "reverse" use of dimension
-y = np.array(temp_series.index.tolist())
-x = np.array(temp_series.columns.tolist())
-ax.set_yticks(x, minor=False)
-ax.set_xticks(y, minor=False)
-
-
-ax.set_xticklabels(x, minor=False)
-ax.set_yticklabels(y, minor=False)
-plt.show()
+# # Read scalar names
+# for m in range(reader.GetNumberOfScalarsInFile()):
+#     print(reader.GetScalarsNameInFile(m))
+#
+#
+# import matplotlib.pyplot as plt
+# import numpy as np
+# column_labels = list('ABCD')
+# row_labels = list('WXYZ')
+# data = temp_series.values
+# fig, ax = plt.subplots()
+# heatmap = ax.pcolor(data)
+#
+# # put the major ticks at the middle of each cell, notice "reverse" use of dimension
+# y = np.array(temp_series.index.tolist())
+# x = np.array(temp_series.columns.tolist())
+# ax.set_yticks(x, minor=False)
+# ax.set_xticks(y, minor=False)
+#
+#
+# ax.set_xticklabels(x, minor=False)
+# ax.set_yticklabels(y, minor=False)
+# plt.show()
 
 
 # ---------------------- Machine- learning part ----------------------------------------------
@@ -146,11 +163,13 @@ plt.show()
 # Add some normalized columns
 wellbore_data['time_norm'] = wellbore_data['time'].astype(float) /\
                              (wellbore_data['time'].max() - wellbore_data['time'].min())
-wellbore_data['temp_norm'] = (wellbore_data.temperature - wellbore_data.temperature.min()) / \
-                             (wellbore_data.temperature.max() - wellbore_data.temperature.min())
-wellbore_data['ib_norm'] = (wellbore_data.IB.astype(float) - wellbore_data.IB.min()) / \
+wellbore_data['temp_norm'] = (wellbore_data['T'] - wellbore_data['T'].min()) / \
+                             (wellbore_data['T'].max() - wellbore_data['T'].min())
+wellbore_data['len_norm'] = (wellbore_data.IB.astype(float) - wellbore_data.IB.min()) / \
                            (wellbore_data.IB.max() - wellbore_data.IB.min())
-X = wellbore_data.loc[:, ['time_norm', 'temp_norm', 'ib_norm']].values
+X = wellbore_data.loc[:, ['time_norm', 'temp_norm', 'len_norm']].values
+
+# Clustering
 kmeans = KMeans(n_clusters=3).fit(X)
 wellbore_data['kmeans_label'] = kmeans.labels_
 
@@ -164,14 +183,23 @@ pl.show(False)
 5654
 
 wellbore_data['fracture'] = 0
-wellbore_data.loc[wellbore_data.IB.isin([320,5654]), 'fracture'] = 1
+wellbore_data.loc[wellbore_data.IB.isin([320,5654,5656]), 'fracture'] = 1
 X = wellbore_data.loc[:, ['time_norm', 'temp_norm']]
+
 Y = wellbore_data.loc[:,'fracture']
 clf = tree.DecisionTreeClassifier()
 clf = clf.fit(X, Y)
 wellbore_data['fracture_pred'] = clf.predict(X)
 
-ts3 = wellbore_data.pivot(values='fracture', index='IB', columns='time')
+ts_2  = temp_series.sample(len(temp_series))
+X_test = ts_2.stack().reset_index()
+X_test.rename(columns={0:'T', 'level_0': 'IB'},inplace=True)
+X_test['time_norm'] = X_test['time'].astype(float) / (X_test['time'].max() - X_test['time'].min())
+X_test['temp_norm'] = (X_test['T'] - X_test['T'].min()) / (X_test['T'].max() - X_test['T'].min())
+X_test['fracture_pred'] = clf.predict(X_test.loc[:, ['time_norm', 'temp_norm']])
+
+ts_3 = wellbore_data.pivot(values='fracture_pred', index='IB', columns='time')
+ts3 = X_test.pivot(values='fracture_pred', index='IB', columns='time')
 pl.pcolor(ts3.values)
 pl.colorbar()
 pl.show(False)
