@@ -61,7 +61,8 @@ tcols = {'1': ['temp_norm'],
          '2': ['temp_norm', 'time_norm'],
          '3': ['space_deriv'],
          '4': ['temp_norm', 'space_deriv'],
-         '5': ['temp_norm', 'space_deriv', 'time_deriv']}
+         '5': ['temp_norm', 'space_deriv', 'time_deriv'],
+         '6': ['time_deriv']}
 
 # Train N different trees
 trees = {case: train_tree(train_data, tcols[case]) for case in tcols.keys()}

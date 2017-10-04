@@ -100,8 +100,7 @@ for c in range(len(cell_locations)):
         pt_ids = cell_data[stt:end]
     nodes_dict.append(pt_ids)
 
-# Dataframe with the ids of the nodes corresponding to each cell
-all_nodes = pn.DataFrame(nodes_dict).stack().reset_index()
+ all_nodes = pn.DataFrame(nodes_dict).stack().reset_index()
 all_nodes.rename(columns={'level_0': 'cell_id', 'level_1': 'cell_node_count', 0: 'node_id'}, inplace=True)
 all_nodes.loc[:, ['cell_id', 'node_id']] = all_nodes.loc[:, ['cell_id', 'node_id']].astype(int)
 

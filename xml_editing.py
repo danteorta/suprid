@@ -4,8 +4,8 @@ from io import StringIO
 from lxml.etree import CDATA
 from lxml import etree
 import os
-import numpy as np
-
+import subprocess
+import pdb
 
 def multiply_fracture_conductivity(origin_xml, new_xml, multiplier):
     """Function that generates a nex XML with some multiple of the conductivity
@@ -33,6 +33,7 @@ def multiply_fracture_conductivity(origin_xml, new_xml, multiplier):
     # Enforce data types
     cond_data = cond_data.astype({'id_face':str, 'cond': str})
 
+    pdb.set_trace()
     # Return the modified data to the text format
     b = cond_data.values.tolist()
     step_1 = ['\t\t\t\t'.join(elm) for elm in b]
@@ -126,17 +127,23 @@ def create_wells_file(save_file_path):
 
 def main():
     # Open the XML file
-    files_path = 'D:\\Users\dorta\Dropbox\Stanford\Research\work' \
-                 'space\\test_run\DiscretizationToolkit\\'
-    save_path = 'D:\\Users\dorta\Dropbox\Stanford\Research\workspace\sandbox\\'
+    # files_path = 'D:\\Users\dorta\Dropbox\Stanford\Research\work' \
+    #              'space\\test_run\DiscretizationToolkit\\'
+    # save_path = 'D:\\Users\dorta\Dropbox\Stanford\Research\workspace\sandbox\\'
+    files_path = 'D:/Users/dorta/Dropbox/Stanford/Research/work' \
+                 'space/test_run/DiscretizationToolkit/'
+    save_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/sandbox/'
+    
     orig_filename = files_path + 'xDante.xml'
-    for m in range(80, 121, 5):
 
+    # Iterate though the multipliers
+    for m in range(80, 121, 5):
         # Create new folder for the files
-        directory = save_path + '{0}\\'.format(m)
+        directory = save_path + '{0}/'.format(m)
         if not os.path.exists(directory):
             os.makedirs(directory)
 
+        # Define the full path of the new files
         new_xml_path = directory + '{0}_mesh.xml'.format(m)
         wells_txt_path = directory + '{0}_wells.txt'.format(m)
         dialog_path = directory + 'dialog.txt'
@@ -149,6 +156,10 @@ def main():
         my_mult = m / 100.0
         multiply_fracture_conductivity(orig_filename, new_xml_path, my_mult)
 
+        # Command line
+        args_cmd = ['{0}DISCR2GPRS'.format(save_path), '{0}/dialog.txt'.format(directory)]
+        subprocess.run(args=args_cmd, stdout=subprocess.PIPE, shell=True)
+        # print(p.stdout)
 
 
 
