@@ -23,7 +23,7 @@ zs = np.linspace( stt_y, end_y, num=z_steps)
 [x_mesh1, z_mesh1] = np.meshgrid(xs, zs)
 [x_mesh2, z_mesh2] = np.meshgrid(xs + 50, zs)
 # Left origin for each cluster
-x_cluster_orig = [10, 50]
+x_cluster_orig = [0, 25, 50]
 # Mesh quality parameter
 lc =1
 # plt.scatter(x_mesh1, z_mesh1)
@@ -39,14 +39,17 @@ for clust_orig in x_cluster_orig:
 # Same Loop. Separate to get the geo code more tidy
 for pt_cnt in range(int(last_p.id) + 1):
     if pt_cnt <= int(last_p.id) - z_steps and pt_cnt % int(z_steps) > 0:
-        print(pt_cnt)
+        # print(pt_cnt)
         last_line = geom.add_line(pt_cnt-1,pt_cnt)
         last_line = geom.add_line(pt_cnt, pt_cnt+z_steps)
         last_line = geom.add_line(pt_cnt+z_steps, pt_cnt+z_steps-1)
         last_line = geom.add_line(pt_cnt+z_steps-1, pt_cnt-1)
         lst_ln = int(last_line.id)
         # Add line loop in the fractures inner area
-        last_ll = geom.add_line_loop(range(lst_ln -3, lst_ln))
+        last_ll = geom.add_line_loop(range(lst_ln -3, lst_ln+1))
+        last_surf =  geom.add_plane_surface(last_ll)
+        # Add surface
+
 
 #Define boundaries
 top_frac = z_well + (z_steps * frac_z_spacing / 2.0)
