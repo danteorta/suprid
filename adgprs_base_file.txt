@@ -1,0 +1,109 @@
+-- Default AD-GPRS header file --
+-- For more options use AD-GPRS manuals  --
+-- Header file is valid for geomechanical module --
+-- Layout by Timur Garipov --
+
+MODEL ---------> Define the model and formulation that is run in AD-GPRS
+NATURAL KVALUE THERMAL 5 3 / 
+# Natural: Nonlinear formulation. Standard Natural formulation. 
+# Kvalue: (type of phase-equilibrium computation)is thermal compositional K-value flash 
+# Thermal: - Thermal or isothermal flag
+# Number of components (5) 
+# Number of phases (3)
+
+VERBOSE ----------> Verbosity parameter
+DEBUG ALL
+/
+
+LINEAR ----------> Set the linear solver conrol parameters
+GMRES_R CPR0 1e-4 500 /
+/
+# Gmres_r: right preconditioned generalized minimum residual
+# CPR0: CPR preconditioner with AMG + BILU(0) 
+# Linear solver tolerance (set to default)
+# Maximum number of iterations (default is 100)
+
+NONLINEAR ---------> Define parameters for nonlinear solver
+APPL 1e-4 25 5
+/
+# AAPPL: Applyard chopping
+# Tolerance for mass conservation and secondary (thermodynamic) equations (set to default)
+# Max number of non linear iterations per timestep (default is 12)
+# Max number of stationary iterations per timestep (default is 3)
+
+FACILITY -----> Parameters for facility solver. 
+1e-2
+/
+# Tolerance for facility eqns in solver and global newton iteration
+
+INCLUDE
+model/dimens.txt
+/
+# this file includes the number of grid cells
+
+INCLUDE
+model/depth.txt
+/
+# this file includes a list of depths for each grid cell
+
+INCLUDE
+model/flow_properties.txt
+/
+# Include PRESSURE, SGAS (gas saturation), SWAT (Initial water saturation (100%)), SATNUM (??)
+# ZMF (overall composition??), RTEMP (temperature), THCROCK(thermal conductivity)
+
+INCLUDE
+model/poro.txt
+/
+# PORO keyword, include a value of porosity for each cell
+
+INCLUDE
+model/transn.txt
+/
+# TPFACONNS keyword. Specity associated cells and transmissibility values for the two point approximation
+
+INCLUDE
+model/volumes.txt
+/
+# Keyword VOLUME, specity the volume of each gridblock
+
+INCLUDE
+model/props.txt
+/
+# PROPERTIESDVE. methods for properties computations.
+# COMPS, EOS, TEMR, ROCK (compressibility), SCOND, THCGAS, THCWATER, THCOIL, ETC
+
+
+INCLUDE
+model/kval.txt
+/
+# KVTABLIM, GASLIQKV, LIQLIQKV -- K value tables parameters
+
+INCLUDE
+model/scal.txt
+/
+#SWOF,SGOF, tables of water, oil-in-water relative permeabilities and water-oil capillary
+pressure as a function of water saturation.
+
+SCOND -------> Standard temperature and pressure (Pressure, Temperatures, gravity constant)
+275. 343. 9.80665e-5/
+/
+
+INCLUDE
+model/wells.txt
+/
+------------------
+OUTPUT
+ASCII TIME DanteModel_T WELLS/
+/
+
+TUNING
+1e-3 1 1e-3 1.1
+/
+
+TSTEP
+1/48
+/
+
+END
+/
