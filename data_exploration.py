@@ -6,7 +6,7 @@ from sklearn import tree
 # ---- Define a few paths ----
 it_name = 'DANTEMODEL_T'
 # model_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/test_run/gprs_repo/'
-model_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/sandbox/80/'
+model_path = 'C:/Users/dorta/Dropbox/Stanford/Research/workspace/simpler_multiple/gprs/'
 rates_path = model_path + '{0}.rates.txt'.format(it_name)
 vars_path = model_path + '{0}.vars.txt'.\
     format(it_name)
@@ -14,19 +14,20 @@ fips_path = model_path + '{0}.FIPS.txt'.format(it_name)
 wells_path = model_path + '{0}.WELLS.StdWell_W.txt'.\
     format(it_name)
 trans_path = model_path + 'model\\trans.txt'
+compdat_path = model_path + 'model\\wells.txt'
 
 # --- Extract all the simulation results (All cells) ----
 # CAREFUL - THIS NUMBER MAY CHANGE
-batch_len = 8282
+batch_len = 6706
 skrow = 3
-stt_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=8282, index_col=False,
+stt_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len, index_col=False,
                      usecols=['IB', 'p', 'T'])
 stt_df['time'] = 0
 # Iteratively import each time step from the file
-for t in range(1, 119):
+for t in range(1, 500):
     try:
-        new_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=8282,
-                             index_col=False, usecols=['IB', 'p', 'T'])
+        new_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len,
+                             index_col=False, usecols=[0,1,2])
     except pn.io.common.EmptyDataError:
         break
 
@@ -37,22 +38,35 @@ for t in range(1, 119):
 # Save stt_df to pickle file
 stt_df.to_pickle(model_path + "stt_df")
 
+# read well from compdat
+compdat = pn.read_csv(compdat_path, delim_whitespace=True, skiprows=4, nrows=264, index_col=False)
+compdat.columns = ['1','cdat','2','3','4','5','6','7','8', '9']
+compdat['id_perf'] = (compdat.cdat - 1).astype(int)
+
 # -- Read well cells from file ----
-well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, nrows=53, index_col=False)
+well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1, nrows=253, index_col=False)
+# well = pn.read_csv(wells_path, delim_whitespace=True, skiprows=1 ,nrows=200, index_col=False)
 # Careful!! there is a shift in id_perf. Dunno why the file in "wells_path"
 # has a different id than the COMPDAT wells.txt file
-id_perf = well.PERF_NB
+id_perf = compdat.id_perf
+# id_perf = well.PERF_NB
 wellbore_data = stt_df.loc[id_perf]
 wellbore_data['temperature'] = wellbore_data['T'] - 273
 wellbore_data.to_pickle(model_path + "wellbore_data")
+# temp_series = wellbore_data.pivot(values='T', index='time', columns='IB')
 temp_series = wellbore_data.pivot(values='T', index='IB', columns='time')
+p_temp_series = wellbore_data.pivot(values='p', index='IB', columns='time')
 # Randomize the order
 # ts_2  = temp_series.sample(len(temp_series))
 # temp_series = stt_df.pivot(values='T', index='IB', columns='time')
 
 
 # # Primary plot
-pl.pcolor(temp_series.values)
+ordered_cols = id_perf.values.tolist()
+b = temp_series.loc[ordered_cols]
+b_p = p_temp_series.loc[ordered_cols]
+# pl.pcolor(temp_series.T.values)
+pl.pcolor(b_p)
 pl.colorbar()
 pl.show(False)
 
@@ -67,7 +81,7 @@ from vtk import *
 from vtk.util.numpy_support import vtk_to_numpy
 import pandas as pn
 
-vtk_file = 'D:\\Users\\dorta\Dropbox\Stanford\Research\workspace\\test_run\DiscretizationToolkit\\output_mesh.vtk'
+vtk_file = 'C:/Users/dorta/Dropbox/Stanford/Research/workspace/simpler_multiple/disc/output_mesh.vtk'
 
 # load a vtk file as input
 reader = vtk.vtkUnstructuredGridReader()
@@ -100,7 +114,7 @@ for c in range(len(cell_locations)):
         pt_ids = cell_data[stt:end]
     nodes_dict.append(pt_ids)
 
- all_nodes = pn.DataFrame(nodes_dict).stack().reset_index()
+all_nodes = pn.DataFrame(nodes_dict).stack().reset_index()
 all_nodes.rename(columns={'level_0': 'cell_id', 'level_1': 'cell_node_count', 0: 'node_id'}, inplace=True)
 all_nodes.loc[:, ['cell_id', 'node_id']] = all_nodes.loc[:, ['cell_id', 'node_id']].astype(int)
 
@@ -114,10 +128,20 @@ centroids = centroids.merge(flowcell_ids, on='cell_id', how='left')
 wb_ids = wellbore_data.IB.unique()
 centroids.loc[:,'wellbore'] = 0
 centroids.loc[centroids.flowcell_id.isin(wb_ids), 'wellbore'] = 1
+wellbore_centroids = centroids.loc[centroids.wellbore==1]
+
+# /////Get the right coords  in temp_series
+new_wellbore_data = wellbore_data.merge(wellbore_centroids, how='left', left_on='IB', right_on='flowcell_id')
+new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
+
+
+iphone = new_wellbore_data.groupby(['time', 'x']).T.mean().reset_index()
+new_temp_series = iphone.pivot(values='T', index='x', columns='time')
 
 # Scatter plot of centroids
-ax = centroids.loc[centroids.wellbore==1].plot.scatter(x='x', y='y', color='red', label='wellbore');
-centroids.loc[centroids.wellbore==0].plot.scatter(x='x', y='y', color='gray', label='other', ax=ax);
+ax = centroids.loc[centroids.wellbore==1].plot.scatter(x='x', y='z', color='red', label='wellbore');
+centroids.loc[centroids.wellbore==0].plot.scatter(x='x', y='z', color='gray', label='other', ax=ax);
+pl.show(False)
 
 
 wb = wellbore_data.merge(centroids, how='left', left_on='IB', right_on='flowcell_id')
