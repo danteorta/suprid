@@ -68,22 +68,37 @@ p_temp_series = wellbore_data.pivot(values='p', index='IB', columns='Day')
 batch_len = 5
 skrow = 1
 rates_df = pn.read_csv(wells_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len, index_col=False)
-rates_df['time'] = 0
 # Iteratively import each time step from the file
 for t in range(1, 500):
+    skrow = skrow + batch_len + 3
     try:
         new_r_df = pn.read_csv(wells_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len, index_col=False)
     except pn.io.common.EmptyDataError:
         break
     new_r_df['time'] = t
     rates_df = rates_df.append(new_r_df)
-    skrow = skrow + batch_len + 3
     print("batch {0}".format(t))
 # The skipped tsteps are: TS = [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54] (while Rate = 0 )
 # mega brute force patch
-a.append(pn.DataFrame(np.zeros([12,11]), columns=a.columns),ignore_index=True)
+# a.append(pn.DataFrame(np.zeros([12,11]), columns=a.columns),ignore_index=True)
+# Nasty brute force way
+wells_df = pn.read_csv(wells_path)
+time_locs = range(6,len(wells_df),7)
+# List of strings with the time after zero
+aux = wells_df['Time = 0'].loc[time_locs].values.tolist()
+aux = [float(x.replace('Time = ','')) for x in aux]
+times = [0]
+times.extend(aux)
+rate_times = pn.DataFrame(times, columns=['Day'])
+rate_times['time'] = range(len(rate_times))
+# Merge
+rates_df = rates_df.merge(rate_times, how='left', on='time')
+rates_df.rename(columns={'PERF_NB':'IB'},inplace=True)
+rates_df['Day'] = rates_df.Day.round(4)
+# truncate
 
-
+wellbore_data = wellbore_data.merge(rates_df, how='left', on=['IB','Day'])
+wellbore_data.fillna(0, inplace=True)
 # -------------------
 # # # Primary plot
 # ordered_cols = id_perf.values.tolist()
