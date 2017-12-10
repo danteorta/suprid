@@ -14,7 +14,7 @@ fips_path = model_path + '{0}.FIPS.txt'.format(it_name)
 wells_path = model_path + '{0}.WELLS.StdWell_W.txt'.\
     format(it_name)
 trans_path = model_path + 'model\\trans.txt'
-compdat_path = model_path + 'model\\wells.txt'
+compdat_path = model_path + 'model/wells.txt'
 
 # --- Extract all the simulation results (All cells) ----
 # CAREFUL - THIS NUMBER MAY CHANGE
@@ -39,7 +39,7 @@ for t in range(1, 500):
 stt_df.to_pickle(model_path + "stt_df")
 
 # read well from compdat
-compdat = pn.read_csv(compdat_path, delim_whitespace=True, skiprows=4, nrows=264, index_col=False)
+compdat = pn.read_csv(compdat_path, delim_whitespace=True, skiprows=4, nrows=264, index_col=False,header=None)
 compdat.columns = ['1','cdat','2','3','4','5','6','7','8', '9']
 compdat['id_perf'] = (compdat.cdat - 1).astype(int)
 
@@ -54,27 +54,51 @@ wellbore_data = stt_df.loc[id_perf]
 wellbore_data['temperature'] = wellbore_data['T'] - 273
 wellbore_data.to_pickle(model_path + "wellbore_data")
 # temp_series = wellbore_data.pivot(values='T', index='time', columns='IB')
-temp_series = wellbore_data.pivot(values='T', index='IB', columns='time')
-p_temp_series = wellbore_data.pivot(values='p', index='IB', columns='time')
+# Add real time values (If tstep is >= 1e-4 this will work)
+tsteps = pn.read_csv(rates_path, delim_whitespace=True, index_col=False, usecols=['TS','Day'])
+wellbore_data = wellbore_data.merge(tsteps, how='left', right_on='TS', left_on='time')
+
+temp_series = wellbore_data.pivot(values='T', index='IB', columns='Day')
+p_temp_series = wellbore_data.pivot(values='p', index='IB', columns='Day')
 # Randomize the order
 # ts_2  = temp_series.sample(len(temp_series))
 # temp_series = stt_df.pivot(values='T', index='IB', columns='time')
 
+# Read rates///////////////////////////////// ------------------------
+batch_len = 5
+skrow = 1
+rates_df = pn.read_csv(wells_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len, index_col=False)
+rates_df['time'] = 0
+# Iteratively import each time step from the file
+for t in range(1, 500):
+    try:
+        new_r_df = pn.read_csv(wells_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len, index_col=False)
+    except pn.io.common.EmptyDataError:
+        break
+    new_r_df['time'] = t
+    rates_df = rates_df.append(new_r_df)
+    skrow = skrow + batch_len + 3
+    print("batch {0}".format(t))
+# The skipped tsteps are: TS = [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54] (while Rate = 0 )
+# mega brute force patch
+a.append(pn.DataFrame(np.zeros([12,11]), columns=a.columns),ignore_index=True)
 
+
+# -------------------
+# # # Primary plot
+# ordered_cols = id_perf.values.tolist()
+# b = temp_series.loc[ordered_cols]
+# b_p = p_temp_series.loc[ordered_cols]
+# # pl.pcolor(temp_series.T.values)
+# pl.pcolor(b)
+# pl.colorbar()
+# pl.show(False)
+#
+#
 # # Primary plot
-ordered_cols = id_perf.values.tolist()
-b = temp_series.loc[ordered_cols]
-b_p = p_temp_series.loc[ordered_cols]
-# pl.pcolor(temp_series.T.values)
-pl.pcolor(b_p)
-pl.colorbar()
-pl.show(False)
-
-
-# Primary plot
-pl.pcolor(ts_2.values)
-pl.colorbar()
-pl.show(False)
+# pl.pcolor(ts_2.values)
+# pl.colorbar()
+# pl.show(False)
 
 # ----------------- Read vtk fancy way -----------------
 from vtk import *
@@ -92,40 +116,89 @@ reader.Update()
 data = reader.GetOutput()
 
 # Map of cell_id to flowcell_id
-flowcell_ids = pn.DataFrame(vtk_to_numpy(data.GetCellData().GetArray('FLOWCELL_ID')), columns=['flowcell_id'])
-flowcell_ids['cell_id'] = flowcell_ids.index
-# Coordinates of each node
-pts_coords = pn.DataFrame(vtk_to_numpy(data.GetPoints().GetData()), columns=['x', 'y', 'z'])
-pts_coords['node_id'] = pts_coords.index
+# flowcell_ids = pn.DataFrame(vtk_to_numpy(data.GetCellData().GetArray('FLOWCELL_ID')), columns=['flowcell_id'])
+# flowcell_ids['cell_id'] = flowcell_ids.index
+fcell_centroid = pn.DataFrame(vtk_to_numpy(data.GetCellData().GetArray('GEOM_UTIL_CENTROID')), columns=['x','y','z'])
+fcells = pn.DataFrame({'flowcell_id': vtk_to_numpy(data.GetCellData().GetArray('FLOWCELL_ID')),
+                       'x': fcell_centroid['x'],
+                       'y': fcell_centroid['y'],
+                       'z': fcell_centroid['z'],
+                       'poro': vtk_to_numpy(data.GetCellData().GetArray('PORO')),
+                       'gridnum': vtk_to_numpy(data.GetCellData().GetArray('GRIDNUM'))
+                       })
+wb_ids = compdat.id_perf.unique()
+fcells.loc[:,'wellbore'] = 0
+fcells.loc[fcells.flowcell_id.isin(wb_ids), 'wellbore'] = 1
 
-# cell_locations = index where the integer with the number of nodes in each cell is located
-# cell_data[cell_locations] <-- Number of nodes in each cell
-cell_locations = vtk_to_numpy(data.GetCellLocationsArray())
-cell_data = vtk_to_numpy(data.GetCells().GetData())
+new_wellbore_data = wellbore_data.merge(fcells, how='left', left_on='IB', right_on='flowcell_id')
+new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
 
-nodes_dict = []
-for c in range(len(cell_locations)):
-    stt = cell_locations[c] + 1
-    # last case
-    if c == len(cell_locations)-1:
-        pt_ids = cell_data[stt:]
-    else:
-        end = cell_locations[c+1]
-        pt_ids = cell_data[stt:end]
-    nodes_dict.append(pt_ids)
+iphone = new_wellbore_data.groupby(['Day', 'x']).T.mean().reset_index()
+new_temp_series = iphone.pivot(values='T', index='x', columns='Day')
+# wellbore_centroids.loc[wellbore_centroids.x.between(-1,1) & wellbore_centroids.z.between(-701, -698)]
+# new_temp_series[70].plot()
 
-all_nodes = pn.DataFrame(nodes_dict).stack().reset_index()
-all_nodes.rename(columns={'level_0': 'cell_id', 'level_1': 'cell_node_count', 0: 'node_id'}, inplace=True)
-all_nodes.loc[:, ['cell_id', 'node_id']] = all_nodes.loc[:, ['cell_id', 'node_id']].astype(int)
 
-all_nodes = all_nodes.merge(pts_coords, on='node_id', how='left')
+pl.pcolor(new_temp_series)
+pl.colorbar()
+pl.show(False)
 
-# Get centroids
-centroids = all_nodes.loc[:,['cell_id','x','y','z']].groupby('cell_id').agg('mean').reset_index()
-centroids = centroids.merge(flowcell_ids, on='cell_id', how='left')
+new_temp_series[10].plot()
+new_temp_series[30].plot()
+new_temp_series[50].plot()
+new_temp_series[70].plot()
+new_temp_series[85].plot()
+pl.show(False)
+
+
+# Plot centroids
+ax = fcells.loc[fcells.wellbore==1].plot.scatter(x='x', y='z', color='red', label='wellbore');
+fcells.loc[fcells.wellbore==0].plot.scatter(x='x', y='z', color='gray', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==4626].plot.scatter(x='x', y='z', color='blue', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==4612].plot.scatter(x='x', y='z', color='blue', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==2473].plot.scatter(x='x', y='z', color='blue', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==2739].plot.scatter(x='x', y='z', color='blue', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==1034].plot.scatter(x='x', y='z', color='blue', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==1223].plot.scatter(x='x', y='z', color='blue', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==4852].plot.scatter(x='x', y='z', color='green', label='other', ax=ax);
+fcells.loc[fcells.flowcell_id==4374].plot.scatter(x='x', y='z', color='green', label='other', ax=ax);
+
+pl.show(False)
+
+
+# # Coordinates of each node
+# pts_coords = pn.DataFrame(vtk_to_numpy(data.GetPoints().GetData()), columns=['x', 'y', 'z'])
+# pts_coords['node_id'] = pts_coords.index
+#
+# # cell_locations = index where the integer with the number of nodes in each cell is located
+# # cell_data[cell_locations] <-- Number of nodes in each cell
+# cell_locations = vtk_to_numpy(data.GetCellLocationsArray())
+# cell_data = vtk_to_numpy(data.GetCells().GetData())
+#
+# nodes_dict = []
+# for c in range(len(cell_locations)):
+#     stt = cell_locations[c] + 1
+#     # last case
+#     if c == len(cell_locations)-1:
+#         pt_ids = cell_data[stt:]
+#     else:
+#         end = cell_locations[c+1]
+#         pt_ids = cell_data[stt:end]
+#     nodes_dict.append(pt_ids)
+
+# all_nodes = pn.DataFrame(nodes_dict).stack().reset_index()
+# all_nodes.rename(columns={'level_0': 'cell_id', 'level_1': 'cell_node_count', 0: 'node_id'}, inplace=True)
+# all_nodes.loc[:, ['cell_id', 'node_id']] = all_nodes.loc[:, ['cell_id', 'node_id']].astype(int)
+#
+# all_nodes = all_nodes.merge(pts_coords, on='node_id', how='left')
+#
+# # Get centroids
+# centroids = all_nodes.loc[:,['cell_id','x','y','z']].groupby('cell_id').agg('mean').reset_index()
+# centroids = centroids.merge(flowcell_ids, on='cell_id', how='left')
 
 # These are the correct ones
-wb_ids = wellbore_data.IB.unique()
+# wb_ids = wellbore_data.IB.unique()
+
 centroids.loc[:,'wellbore'] = 0
 centroids.loc[centroids.flowcell_id.isin(wb_ids), 'wellbore'] = 1
 wellbore_centroids = centroids.loc[centroids.wellbore==1]
@@ -137,6 +210,13 @@ new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
 
 iphone = new_wellbore_data.groupby(['time', 'x']).T.mean().reset_index()
 new_temp_series = iphone.pivot(values='T', index='x', columns='time')
+wellbore_centroids.loc[wellbore_centroids.x.between(-1,1) & wellbore_centroids.z.between(-701, -698)]
+new_temp_series[70].plot()
+
+
+pl.pcolor(new_temp_series)
+pl.colorbar()
+pl.show(False)
 
 # Scatter plot of centroids
 ax = centroids.loc[centroids.wellbore==1].plot.scatter(x='x', y='z', color='red', label='wellbore');
