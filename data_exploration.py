@@ -2,6 +2,7 @@ import pandas as pn
 from matplotlib import pyplot as pl
 from sklearn.cluster import KMeans
 from sklearn import tree
+import decimal
 
 # ---- Define a few paths ----
 it_name = 'DANTEMODEL_T'
@@ -94,7 +95,7 @@ rate_times= pn.DataFrame({'Day': [0] + [x.replace('Time = ','') for x in aux],
 rates_df = rates_df.merge(rate_times, how='left', on='time')
 rates_df.rename(columns={'PERF_NB':'IB'},inplace=True)
 # rates_df['Day2'] = rates_df.Day.apply(lambda xx: '%s' % float('%.4g' % round(xx,5)))
-rates_df['Day2'] = rates_df.Day.apply(lambda xx:
+rates_df['Day'] = rates_df.Day.apply(lambda xx:
                                       str(decimal.Decimal(xx).quantize(decimal.Decimal('0.0000'),
                                                                    rounding=decimal.ROUND_HALF_DOWN)))
 def rounding_wb(xx):
@@ -125,7 +126,7 @@ def rounding_wb(xx):
 from vtk import *
 from vtk.util.numpy_support import vtk_to_numpy
 import pandas as pn
-import decimal
+
 
 vtk_file = 'C:/Users/dorta/Dropbox/Stanford/Research/workspace/simpler_multiple/disc/output_mesh.vtk'
 
@@ -155,8 +156,8 @@ fcells.loc[fcells.flowcell_id.isin(wb_ids), 'wellbore'] = 1
 new_wellbore_data = wellbore_data.merge(fcells, how='left', left_on='IB', right_on='flowcell_id')
 new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
 
-new_wellbore_data['Day2'] = new_wellbore_data.Day.apply(rounding_wb,1)
-new_wellbore_data = new_wellbore_data.merge(rates_df, how='left', on=['IB','Day2'])
+new_wellbore_data['Day'] = new_wellbore_data.Day.apply(rounding_wb,1)
+new_wellbore_data = new_wellbore_data.merge(rates_df, how='left', on=['IB','Day'])
 new_wellbore_data.fillna(0, inplace=True)
 new_wellbore_data.loc[new_wellbore_data.IB.isin([4374, 2737, 2472, 1031, 1225]),:]
 
