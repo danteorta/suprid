@@ -25,6 +25,7 @@ stt_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=bat
 stt_df['time'] = 0
 # Iteratively import each time step from the file
 for t in range(1, 500):
+    skrow = skrow + batch_len + 3
     try:
         new_df = pn.read_csv(vars_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len,
                              index_col=False, usecols=[0,1,2])
@@ -33,10 +34,9 @@ for t in range(1, 500):
 
     new_df['time'] = t
     stt_df = stt_df.append(new_df)
-    skrow = skrow + batch_len + 3
     print("batch {0}".format(t))
 # Save stt_df to pickle file
-stt_df.to_pickle(model_path + "stt_df")
+# stt_df.to_pickle(model_path + "stt_df")
 
 # read well from compdat
 compdat = pn.read_csv(compdat_path, delim_whitespace=True, skiprows=4, nrows=264, index_col=False,header=None)
@@ -69,6 +69,7 @@ batch_len = 5
 skrow = 1
 rates_df = pn.read_csv(wells_path, delim_whitespace=True, skiprows=skrow, nrows=batch_len, index_col=False)
 # Iteratively import each time step from the file
+rates_df['time'] = 0
 for t in range(1, 500):
     skrow = skrow + batch_len + 3
     try:
@@ -81,24 +82,29 @@ for t in range(1, 500):
 # The skipped tsteps are: TS = [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54] (while Rate = 0 )
 # mega brute force patch
 # a.append(pn.DataFrame(np.zeros([12,11]), columns=a.columns),ignore_index=True)
-# Nasty brute force way
+# Get the Day for the ratesNasty brute force way
 wells_df = pn.read_csv(wells_path)
 time_locs = range(6,len(wells_df),7)
 # List of strings with the time after zero
 aux = wells_df['Time = 0'].loc[time_locs].values.tolist()
-aux = [float(x.replace('Time = ','')) for x in aux]
-times = [0]
-times.extend(aux)
-rate_times = pn.DataFrame(times, columns=['Day'])
-rate_times['time'] = range(len(rate_times))
-# Merge
+rate_times= pn.DataFrame({'Day': [0] + [x.replace('Time = ','') for x in aux],
+                          'time': range(len(aux)+1)}
+                         )
+# Merge with actual rates
 rates_df = rates_df.merge(rate_times, how='left', on='time')
 rates_df.rename(columns={'PERF_NB':'IB'},inplace=True)
-rates_df['Day'] = rates_df.Day.round(4)
-# truncate
+# rates_df['Day2'] = rates_df.Day.apply(lambda xx: '%s' % float('%.4g' % round(xx,5)))
+rates_df['Day2'] = rates_df.Day.apply(lambda xx:
+                                      str(decimal.Decimal(xx).quantize(decimal.Decimal('0.0000'),
+                                                                   rounding=decimal.ROUND_HALF_DOWN)))
+def rounding_wb(xx):
+    """This is the rule for translating from rates to the other STDwell file time """
+    if xx<1:
+        return str(format(xx, '.4f'))
+    else:
+        return str(format(round(xx,3), '.4f'))
 
-wellbore_data = wellbore_data.merge(rates_df, how='left', on=['IB','Day'])
-wellbore_data.fillna(0, inplace=True)
+
 # -------------------
 # # # Primary plot
 # ordered_cols = id_perf.values.tolist()
@@ -119,6 +125,7 @@ wellbore_data.fillna(0, inplace=True)
 from vtk import *
 from vtk.util.numpy_support import vtk_to_numpy
 import pandas as pn
+import decimal
 
 vtk_file = 'C:/Users/dorta/Dropbox/Stanford/Research/workspace/simpler_multiple/disc/output_mesh.vtk'
 
@@ -147,6 +154,11 @@ fcells.loc[fcells.flowcell_id.isin(wb_ids), 'wellbore'] = 1
 
 new_wellbore_data = wellbore_data.merge(fcells, how='left', left_on='IB', right_on='flowcell_id')
 new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
+
+new_wellbore_data['Day2'] = new_wellbore_data.Day.apply(rounding_wb,1)
+new_wellbore_data = new_wellbore_data.merge(rates_df, how='left', on=['IB','Day2'])
+new_wellbore_data.fillna(0, inplace=True)
+new_wellbore_data.loc[new_wellbore_data.IB.isin([4374, 2737, 2472, 1031, 1225]),:]
 
 iphone = new_wellbore_data.groupby(['Day', 'x']).T.mean().reset_index()
 new_temp_series = iphone.pivot(values='T', index='x', columns='Day')
