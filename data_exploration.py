@@ -8,11 +8,12 @@ import decimal
 it_name = 'DANTEMODEL_T'
 # model_path = 'D:/Users/dorta/Dropbox/Stanford/Research/workspace/test_run/gprs_repo/'
 model_path = 'C:/Users/dorta/Dropbox/Stanford/Research/workspace/simpler_multiple/gprs/'
-rates_path = model_path + '{0}.rates.txt'.format(it_name)
-vars_path = model_path + '{0}.vars.txt'.\
+modif = 'rate_50/'
+rates_path = model_path + modif +  '{0}.rates.txt'.format(it_name)
+vars_path = model_path + modif +'{0}.vars.txt'.\
     format(it_name)
-fips_path = model_path + '{0}.FIPS.txt'.format(it_name)
-wells_path = model_path + '{0}.WELLS.StdWell_W.txt'.\
+fips_path = model_path + modif +'{0}.FIPS.txt'.format(it_name)
+wells_path = model_path + modif +'{0}.WELLS.StdWell_W.txt'.\
     format(it_name)
 trans_path = model_path + 'model\\trans.txt'
 compdat_path = model_path + 'model/wells.txt'
@@ -159,6 +160,9 @@ new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
 new_wellbore_data['Day'] = new_wellbore_data.Day.apply(rounding_wb,1)
 new_wellbore_data = new_wellbore_data.merge(rates_df, how='left', on=['IB','Day'])
 new_wellbore_data.fillna(0, inplace=True)
+
+
+# ---------end
 new_wellbore_data.loc[new_wellbore_data.IB.isin([4374, 2737, 2472, 1031, 1225]),:]
 
 iphone = new_wellbore_data.groupby(['Day', 'x']).T.mean().reset_index()
