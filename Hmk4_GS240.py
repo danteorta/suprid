@@ -43,26 +43,26 @@ plt.ylabel('Robust Distance')
 plt.show(False)
 
 inliers = data.loc[robust_dist<thresh,:]
+outliers = data.loc[robust_dist>thresh,:]
 
 # -------------------------- Factor Analysis --------------------------
 inliers_full = pd.DataFrame.from_csv('inliers_factors.csv')
 data_fact = inliers_full[['factor'+str(x) for x in range(1,6)]]
-X = data_fact.values
+X = data_fact[['factor'+str(x) for x in range(1,6)]].values
 
 clusterer = KMedoids(4)
 inliers_full['label'] = cluster_labels = clusterer.fit_predict(X)
 
 
+# Plot clusters in the X Y plot
 groups = inliers_full.groupby('label')
-
 # Plot
 fig, ax = plt.subplots()
 ax.margins(0.05) # Optional, just adds 5% padding to the autoscaling
 for name, group in groups:
     ax.plot(group.x, group.y, marker='o', linestyle='', ms=4, label=name)
 ax.legend()
-
-plt.show()
+plt.show(False)
 
 
 
