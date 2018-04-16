@@ -79,7 +79,7 @@ compdat.columns = ['cdat','status']
 compdat['id_perf'] = (compdat.cdat - 1).astype(int)
 
 # ----- Extract variables for all cells (Full simulation results. 'vars.txt' file) -----
-stt_df = read_output_batches(vars_path, skip_rows=3, batch_sz=n_cells, cols=[0,1,2], verbose=True)
+stt_df = read_output_batches(vars_path, skip_rows=3, batch_sz=n_cells, cols=[0,1,2], verbose=True, max_batches=2000)
 wellbore_pt = stt_df.loc[compdat.id_perf]
 
 # Add real time values (If tstep is >= 1e-4 this will work)
@@ -88,7 +88,7 @@ tsteps = pn.read_csv(rates_path, delim_whitespace=True, index_col=False, usecols
 wellbore_pt = wellbore_pt.merge(tsteps, how='left', on='TS')
 
 # Read completion rates 'WELLS.StdWell_W' file
-rates_df = read_output_batches(wells_path, skip_rows=1, batch_sz=open_completions,verbose=True)
+rates_df = read_output_batches(wells_path, skip_rows=1, batch_sz=open_completions,verbose=True, max_batches=2000)
 
 # Join P,T data (full) with rates data (incomplete) This could be kept separated
 wellbore_data = wellbore_pt.merge(rates_df, how='left', left_on=['IB', 'TS'], right_on=['PERF_NB','TS'])
@@ -121,7 +121,7 @@ fcells.loc[fcells.flowcell_id.isin(wb_ids), 'in_wellbore'] = 1
 
 new_wellbore_data = wellbore_data.merge(fcells, how='left', left_on='IB', right_on='flowcell_id')
 new_wellbore_data['x'] = new_wellbore_data.x.astype(int)
-
+new_wellbore_data.to_pickle('wellbore_data_p_var_15days')
 # new_wellbore_data['Day'] = new_wellbore_data.Day.apply(rounding_wb,1)
 # new_wellbore_data = new_wellbore_data.merge(rates_df, how='left', on=['IB','Day'])
 # new_wellbore_data.fillna(0, inplace=True)
